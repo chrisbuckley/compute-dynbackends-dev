@@ -6,6 +6,7 @@ description = "Dynamic Backends proxy service - forwards requests to arbitrary o
 language = "javascript"
 manifest_version = 3
 name = "compute-dynbackends-dev"
+service_id = "4CYdEwKdz8ZpIPfElRLI0B"
 
 [scripts]
 build = "npm run build"
