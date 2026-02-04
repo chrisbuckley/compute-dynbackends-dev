@@ -9,3 +9,6 @@ name = "compute-dynbackends-dev"
 
 [scripts]
 build = "npm run build"
+
+# For production, link the "dynserv-key" config store to this service
+# See README.md for setup instructions

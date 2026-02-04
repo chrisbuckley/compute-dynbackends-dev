@@ -1,3 +1,4 @@
+use fastly::config_store::ConfigStore;
 use fastly::http::StatusCode;
 use fastly::{backend::BackendBuilder, Error, Request, Response};
 use std::time::Duration;
@@ -84,10 +85,15 @@ fn is_private_host(hostname: &str) -> bool {
 fn main(mut req: Request) -> Result<Response, Error> {
     let req_url = req.get_url().clone();
 
-    // Validate API key
+    // Validate API key from config store (with fallback for local development)
+    let valid_key = match ConfigStore::try_open("dynserv-key") {
+        Ok(store) => store.get("key").unwrap_or_else(|| "testing".to_string()),
+        Err(_) => "testing".to_string(), // Fallback for local development
+    };
+
     let api_key = req_url.query_pairs().find(|(k, _)| k == "key").map(|(_, v)| v);
     match api_key {
-        Some(key) if key == "testing" => {}
+        Some(key) if key == valid_key => {}
         _ => {
             return Ok(Response::from_status(StatusCode::FORBIDDEN)
                 .with_header("Content-Type", "application/json")

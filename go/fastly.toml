@@ -9,3 +9,6 @@ name = "compute-dynbackends-dev"
 
 [scripts]
 build = "tinygo build -target=wasip1 -o bin/main.wasm ."
+
+# For production, link the "dynserv-key" config store to this service
+# See README.md for setup instructions

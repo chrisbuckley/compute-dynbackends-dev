@@ -8,6 +8,7 @@ Implemented in three languages: **JavaScript**, **Rust**, and **Go**.
 
 - [Fastly CLI](https://www.fastly.com/documentation/reference/tools/cli/) installed and authenticated (`fastly profile create`)
 - A Fastly Compute service with [Dynamic Backends enabled](https://www.fastly.com/documentation/guides/compute/concepts/dynamic-backends/)
+- A Fastly Config Store named `dynserv-key` containing the API key (see [Config Store Setup](#config-store-setup))
 
 ### Language-specific requirements
 
@@ -48,12 +49,45 @@ go mod tidy
 fastly compute serve
 ```
 
+## Config Store Setup
+
+The API key is stored in a Fastly Config Store named `dynserv-key`. For production deployments, you must create this config store and link it to your service.
+
+### Local Development
+
+For local development, the service falls back to the default key `testing` when the config store is not available. No additional setup is required.
+
+### Production Setup
+
+1. **Create the config store:**
+```bash
+fastly config-store create --name dynserv-key
+```
+
+2. **Get the store ID:**
+```bash
+fastly config-store list
+```
+
+3. **Add the API key** (replace `your-secret-key` with your actual key):
+```bash
+fastly config-store-entry create --store-id <STORE_ID> --key key --value your-secret-key
+```
+
+4. **Link to your service** (after deploying):
+```bash
+fastly resource-link create --version latest --resource-id <STORE_ID> --autoclone
+fastly service-version activate --version latest
+```
+
 ## Deploy to Fastly
 
 From any implementation directory:
 ```bash
 fastly compute publish
 ```
+
+After deploying, remember to [link the config store](#link-to-your-service) to your service.
 
 ## Usage
 
@@ -67,7 +101,7 @@ curl "http://localhost:7676/?key=testing&url=https://httpbin.org/get"
 
 | Parameter | Required | Description |
 |-----------|----------|-------------|
-| `key` | Yes | API key (currently hardcoded as `testing`) |
+| `key` | Yes | API key (must match value in `dynserv-key` config store) |
 | `url` | Yes | Target HTTPS URL to proxy to |
 
 ### Example Requests

@@ -9,3 +9,6 @@ name = "compute-dynbackends-dev"
 
 [scripts]
 build = "cargo build --release --target wasm32-wasip1"
+
+# For production, link the "dynserv-key" config store to this service
+# See README.md for setup instructions
