@@ -1,0 +1,11 @@
+# This file describes a Fastly Compute package. To learn more visit:
+# https://www.fastly.com/documentation/reference/compute/fastly-toml/
+
+authors = ["developer@example.com"]
+description = "Dynamic Backends proxy service - forwards requests to arbitrary origins"
+language = "go"
+manifest_version = 3
+name = "compute-dynbackends-dev"
+
+[scripts]
+build = "tinygo build -target=wasip1 -o bin/main.wasm ."

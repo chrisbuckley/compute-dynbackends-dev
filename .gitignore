@@ -1,3 +1,13 @@
-node_modules/
-bin/
-pkg/
+# JS
+js/node_modules/
+js/bin/
+js/pkg/
+
+# Rust
+rust/target/
+rust/bin/
+rust/pkg/
+
+# Go
+go/bin/
+go/pkg/
