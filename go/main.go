@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/fastly/compute-sdk-go/configstore"
 	"github.com/fastly/compute-sdk-go/fsthttp"
 )
 
@@ -24,9 +25,17 @@ func handleRequest(ctx context.Context, w fsthttp.ResponseWriter, r *fsthttp.Req
 		return
 	}
 
-	// Validate API key
+	// Validate API key from config store (with fallback for local development)
+	validKey := "testing" // Fallback for local development
+	store, err := configstore.Open("dynserv-key")
+	if err == nil {
+		if key, err := store.Get("key"); err == nil {
+			validKey = key
+		}
+	}
+
 	apiKey := reqURL.Query().Get("key")
-	if apiKey != "testing" {
+	if apiKey != validKey {
 		writeJSONError(w, fsthttp.StatusForbidden, "Unauthorized", "Invalid or missing API key")
 		return
 	}

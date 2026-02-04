@@ -1,6 +1,7 @@
 /// <reference types="@fastly/js-compute" />
 
 import { Backend } from "fastly:backend";
+import { ConfigStore } from "fastly:config-store";
 
 addEventListener("fetch", (event) => event.respondWith(handleRequest(event)));
 
@@ -8,9 +9,18 @@ async function handleRequest(event) {
   const req = event.request;
   const reqUrl = new URL(req.url);
 
-  // Validate API key
+  // Validate API key from config store (with fallback for local development)
   const apiKey = reqUrl.searchParams.get("key");
-  if (!apiKey || apiKey !== "testing") {
+  let validKey;
+  try {
+    const config = new ConfigStore("dynserv-key");
+    validKey = config.get("key");
+  } catch (e) {
+    // Fallback for local development when config store is not available
+    validKey = "testing";
+  }
+
+  if (!apiKey || apiKey !== validKey) {
     return new Response(
       JSON.stringify({
         error: "Unauthorized",
