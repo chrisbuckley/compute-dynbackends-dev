@@ -7,11 +7,93 @@ import (
 	"io"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/fastly/compute-sdk-go/fsthttp"
 )
+
+// isPrivateHost checks if hostname is a private/internal address (SSRF protection)
+func isPrivateHost(hostname string) bool {
+	lowerHost := strings.ToLower(hostname)
+
+	// Block localhost variants
+	if lowerHost == "localhost" || lowerHost == "localhost.localdomain" {
+		return true
+	}
+
+	// Block IPv6 localhost
+	if lowerHost == "::1" || lowerHost == "[::1]" {
+		return true
+	}
+
+	// Check for IPv4 address patterns
+	parts := strings.Split(hostname, ".")
+	if len(parts) == 4 {
+		octets := make([]int, 4)
+		valid := true
+		for i, p := range parts {
+			n, err := strconv.Atoi(p)
+			if err != nil || n < 0 || n > 255 {
+				valid = false
+				break
+			}
+			octets[i] = n
+		}
+
+		if valid {
+			a, b := octets[0], octets[1]
+
+			// Loopback: 127.0.0.0/8
+			if a == 127 {
+				return true
+			}
+
+			// Private: 10.0.0.0/8
+			if a == 10 {
+				return true
+			}
+
+			// Private: 172.16.0.0/12
+			if a == 172 && b >= 16 && b <= 31 {
+				return true
+			}
+
+			// Private: 192.168.0.0/16
+			if a == 192 && b == 168 {
+				return true
+			}
+
+			// Link-local: 169.254.0.0/16 (includes AWS metadata endpoint)
+			if a == 169 && b == 254 {
+				return true
+			}
+
+			// Current network: 0.0.0.0/8
+			if a == 0 {
+				return true
+			}
+		}
+	}
+
+	// Block common internal hostnames
+	internalPrefixes := []string{"internal.", "intranet.", "private.", "corp.", "lan."}
+	for _, prefix := range internalPrefixes {
+		if strings.HasPrefix(lowerHost, prefix) {
+			return true
+		}
+	}
+
+	internalSuffixes := []string{".internal", ".local", ".localhost"}
+	for _, suffix := range internalSuffixes {
+		if strings.HasSuffix(lowerHost, suffix) {
+			return true
+		}
+	}
+
+	return false
+}
 
 func main() {
 	fsthttp.ServeFunc(handleRequest)
@@ -65,6 +147,12 @@ func handleRequest(ctx context.Context, w fsthttp.ResponseWriter, r *fsthttp.Req
 	port := targetURL.Port()
 	if port == "" {
 		port = "443"
+	}
+
+	// SSRF Protection: Block requests to private/internal hosts
+	if isPrivateHost(hostname) {
+		writeJSONError(w, fsthttp.StatusForbidden, "Forbidden", "Requests to private or internal hosts are not allowed")
+		return
 	}
 
 	// Create a unique backend name based on host and port

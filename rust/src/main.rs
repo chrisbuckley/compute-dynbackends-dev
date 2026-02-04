@@ -3,6 +3,83 @@ use fastly::{backend::BackendBuilder, Error, Request, Response};
 use std::time::Duration;
 use url::Url;
 
+/// SSRF Protection: Check if hostname is a private/internal address
+fn is_private_host(hostname: &str) -> bool {
+    let lower_host = hostname.to_lowercase();
+
+    // Block localhost variants
+    if lower_host == "localhost" || lower_host == "localhost.localdomain" {
+        return true;
+    }
+
+    // Block IPv6 localhost
+    if lower_host == "::1" || lower_host == "[::1]" {
+        return true;
+    }
+
+    // Check for IPv4 address patterns
+    let parts: Vec<&str> = hostname.split('.').collect();
+    if parts.len() == 4 {
+        let octets: Result<Vec<u8>, _> = parts.iter().map(|p| p.parse::<u8>()).collect();
+        if let Ok(octets) = octets {
+            let (a, b, _, _) = (octets[0], octets[1], octets[2], octets[3]);
+
+            // Loopback: 127.0.0.0/8
+            if a == 127 {
+                return true;
+            }
+
+            // Private: 10.0.0.0/8
+            if a == 10 {
+                return true;
+            }
+
+            // Private: 172.16.0.0/12
+            if a == 172 && (16..=31).contains(&b) {
+                return true;
+            }
+
+            // Private: 192.168.0.0/16
+            if a == 192 && b == 168 {
+                return true;
+            }
+
+            // Link-local: 169.254.0.0/16 (includes AWS metadata endpoint)
+            if a == 169 && b == 254 {
+                return true;
+            }
+
+            // Current network: 0.0.0.0/8
+            if a == 0 {
+                return true;
+            }
+        }
+    }
+
+    // Block common internal hostnames
+    let internal_patterns = [
+        "internal.",
+        "intranet.",
+        "private.",
+        "corp.",
+        "lan.",
+    ];
+    for pattern in internal_patterns {
+        if lower_host.starts_with(pattern) {
+            return true;
+        }
+    }
+
+    let internal_suffixes = [".internal", ".local", ".localhost"];
+    for suffix in internal_suffixes {
+        if lower_host.ends_with(suffix) {
+            return true;
+        }
+    }
+
+    false
+}
+
 #[fastly::main]
 fn main(mut req: Request) -> Result<Response, Error> {
     let req_url = req.get_url().clone();
@@ -61,6 +138,15 @@ fn main(mut req: Request) -> Result<Response, Error> {
                 .with_body(r#"{"error":"Invalid URL: missing hostname"}"#));
         }
     };
+
+    // SSRF Protection: Block requests to private/internal hosts
+    if is_private_host(&hostname) {
+        return Ok(Response::from_status(StatusCode::FORBIDDEN)
+            .with_header("Content-Type", "application/json")
+            .with_body(
+                r#"{"error":"Forbidden","message":"Requests to private or internal hosts are not allowed"}"#,
+            ));
+    }
 
     let port = target_url.port().unwrap_or(443);
 

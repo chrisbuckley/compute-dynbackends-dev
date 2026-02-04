@@ -2,6 +2,73 @@
 
 import { Backend } from "fastly:backend";
 
+// SSRF Protection: Check if hostname is a private/internal address
+function isPrivateHost(hostname) {
+  const lowerHost = hostname.toLowerCase();
+
+  // Block localhost variants
+  if (lowerHost === "localhost" || lowerHost === "localhost.localdomain") {
+    return true;
+  }
+
+  // Check for IP address patterns
+  const ipv4Regex = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
+  const match = hostname.match(ipv4Regex);
+
+  if (match) {
+    const [, a, b, c, d] = match.map(Number);
+
+    // Validate octets
+    if (a > 255 || b > 255 || c > 255 || d > 255) {
+      return true; // Invalid IP, block it
+    }
+
+    // Loopback: 127.0.0.0/8
+    if (a === 127) return true;
+
+    // Private: 10.0.0.0/8
+    if (a === 10) return true;
+
+    // Private: 172.16.0.0/12
+    if (a === 172 && b >= 16 && b <= 31) return true;
+
+    // Private: 192.168.0.0/16
+    if (a === 192 && b === 168) return true;
+
+    // Link-local: 169.254.0.0/16 (includes AWS metadata endpoint)
+    if (a === 169 && b === 254) return true;
+
+    // Broadcast
+    if (a === 255 && b === 255 && c === 255 && d === 255) return true;
+
+    // Current network: 0.0.0.0/8
+    if (a === 0) return true;
+  }
+
+  // Block IPv6 localhost
+  if (lowerHost === "::1" || lowerHost === "[::1]") {
+    return true;
+  }
+
+  // Block common internal hostnames
+  const internalPatterns = [
+    /^internal\./i,
+    /^intranet\./i,
+    /^private\./i,
+    /^corp\./i,
+    /^lan\./i,
+    /\.internal$/i,
+    /\.local$/i,
+    /\.localhost$/i,
+  ];
+
+  for (const pattern of internalPatterns) {
+    if (pattern.test(lowerHost)) return true;
+  }
+
+  return false;
+}
+
 addEventListener("fetch", (event) => event.respondWith(handleRequest(event)));
 
 async function handleRequest(event) {
@@ -71,6 +138,20 @@ async function handleRequest(event) {
 
   const port = targetUrl.port ? parseInt(targetUrl.port, 10) : 443;
   const hostname = targetUrl.hostname;
+
+  // SSRF Protection: Block requests to private/internal hosts
+  if (isPrivateHost(hostname)) {
+    return new Response(
+      JSON.stringify({
+        error: "Forbidden",
+        message: "Requests to private or internal hosts are not allowed",
+      }),
+      {
+        status: 403,
+        headers: { "Content-Type": "application/json" },
+      }
+    );
+  }
 
   // Create a unique backend name based on host and port
   // Backend names must be alphanumeric with underscores/hyphens
