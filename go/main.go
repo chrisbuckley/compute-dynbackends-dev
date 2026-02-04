@@ -77,8 +77,8 @@ func handleRequest(ctx context.Context, w fsthttp.ResponseWriter, r *fsthttp.Req
 	opts := fsthttp.NewBackendOptions().
 		HostOverride(hostname).
 		UseSSL(true).
-		SSLMinVersion(fsthttp.TLSVersion12).
-		SSLMaxVersion(fsthttp.TLSVersion13).
+		SSLMinVersion(fsthttp.TLSVersion1_2).
+		SSLMaxVersion(fsthttp.TLSVersion1_3).
 		SNIHostname(hostname).
 		CertHostname(hostname).
 		ConnectTimeout(10 * time.Second).
