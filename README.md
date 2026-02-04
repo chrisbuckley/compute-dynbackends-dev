@@ -51,11 +51,13 @@ fastly compute serve
 
 ## Config Store Setup
 
-The API key is stored in a Fastly Config Store named `dynserv-key`. For production deployments, you must create this config store and link it to your service.
+The API key is stored in a Fastly Config Store named `dynserv-key`. The config store is **required** - the service will return a 500 error if it's not configured.
 
 ### Local Development
 
-For local development, the service falls back to the default key `testing` when the config store is not available. No additional setup is required.
+The local Viceroy server does not support config stores. For local testing:
+1. Test against the deployed service URL instead of localhost
+2. Or temporarily modify the code for local development (not recommended for production)
 
 ### Production Setup
 

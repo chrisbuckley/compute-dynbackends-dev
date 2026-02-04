@@ -25,13 +25,17 @@ func handleRequest(ctx context.Context, w fsthttp.ResponseWriter, r *fsthttp.Req
 		return
 	}
 
-	// Validate API key from config store (with fallback for local development)
-	validKey := "testing" // Fallback for local development
+	// Validate API key from config store (required)
 	store, err := configstore.Open("dynserv-key")
-	if err == nil {
-		if key, err := store.Get("key"); err == nil {
-			validKey = key
-		}
+	if err != nil {
+		writeJSONError(w, fsthttp.StatusInternalServerError, "Configuration error", "Config store 'dynserv-key' not available. Ensure it is linked to this service.")
+		return
+	}
+
+	validKey, err := store.Get("key")
+	if err != nil || validKey == "" {
+		writeJSONError(w, fsthttp.StatusInternalServerError, "Configuration error", "API key not found in config store")
+		return
 	}
 
 	apiKey := reqURL.Query().Get("key")

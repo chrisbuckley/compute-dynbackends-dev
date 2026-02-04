@@ -9,15 +9,37 @@ async function handleRequest(event) {
   const req = event.request;
   const reqUrl = new URL(req.url);
 
-  // Validate API key from config store (with fallback for local development)
+  // Validate API key from config store (required)
   const apiKey = reqUrl.searchParams.get("key");
   let validKey;
+
   try {
     const config = new ConfigStore("dynserv-key");
     validKey = config.get("key");
   } catch (e) {
-    // Fallback for local development when config store is not available
-    validKey = "testing";
+    return new Response(
+      JSON.stringify({
+        error: "Configuration error",
+        message: "Config store 'dynserv-key' not available. Ensure it is linked to this service.",
+      }),
+      {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      }
+    );
+  }
+
+  if (!validKey) {
+    return new Response(
+      JSON.stringify({
+        error: "Configuration error",
+        message: "API key not found in config store",
+      }),
+      {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      }
+    );
   }
 
   if (!apiKey || apiKey !== validKey) {

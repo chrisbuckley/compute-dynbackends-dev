@@ -8,10 +8,21 @@ use url::Url;
 fn main(mut req: Request) -> Result<Response, Error> {
     let req_url = req.get_url().clone();
 
-    // Validate API key from config store (with fallback for local development)
+    // Validate API key from config store (required)
     let valid_key = match ConfigStore::try_open("dynserv-key") {
-        Ok(store) => store.get("key").unwrap_or_else(|| "testing".to_string()),
-        Err(_) => "testing".to_string(), // Fallback for local development
+        Ok(store) => match store.get("key") {
+            Some(key) => key,
+            None => {
+                return Ok(Response::from_status(StatusCode::INTERNAL_SERVER_ERROR)
+                    .with_header("Content-Type", "application/json")
+                    .with_body(r#"{"error":"Configuration error","message":"API key not found in config store"}"#));
+            }
+        },
+        Err(_) => {
+            return Ok(Response::from_status(StatusCode::INTERNAL_SERVER_ERROR)
+                .with_header("Content-Type", "application/json")
+                .with_body(r#"{"error":"Configuration error","message":"Config store 'dynserv-key' not available. Ensure it is linked to this service."}"#));
+        }
     };
 
     let api_key = req_url.query_pairs().find(|(k, _)| k == "key").map(|(_, v)| v);

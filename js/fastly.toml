@@ -11,5 +11,5 @@ service_id = "4CYdEwKdz8ZpIPfElRLI0B"
 [scripts]
 build = "npm run build"
 
-# For production, link the "dynserv-key" config store to this service
+# The "dynserv-key" config store must be linked to this service
 # See README.md for setup instructions
