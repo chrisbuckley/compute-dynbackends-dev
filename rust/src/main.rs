@@ -1,11 +1,11 @@
-use fastly::http::{Method, StatusCode};
-use fastly::{backend::BackendBuilder, cache_override::CacheOverride, Error, Request, Response};
+use fastly::http::StatusCode;
+use fastly::{backend::BackendBuilder, Error, Request, Response};
 use std::time::Duration;
 use url::Url;
 
 #[fastly::main]
-fn main(req: Request) -> Result<Response, Error> {
-    let req_url = req.get_url();
+fn main(mut req: Request) -> Result<Response, Error> {
+    let req_url = req.get_url().clone();
 
     // Validate API key
     let api_key = req_url.query_pairs().find(|(k, _)| k == "key").map(|(_, v)| v);
@@ -94,46 +94,29 @@ fn main(req: Request) -> Result<Response, Error> {
         }
     };
 
-    // Build the request to the origin
-    // Preserve the path and query string from the target URL
+    // Build the origin URL path with query string
     let origin_path = match target_url.query() {
         Some(q) => format!("{}?{}", target_url.path(), q),
         None => target_url.path().to_string(),
     };
 
-    // Create a new request to the origin
-    let mut origin_request = Request::new(req.get_method().clone(), &origin_path);
+    // Modify the request URL to the target
+    req.set_url(target_url.clone());
+    req.set_path(&origin_path);
 
-    // Copy headers from original request
-    for (name, value) in req.get_headers() {
-        // Skip headers that shouldn't be forwarded
-        let name_str = name.as_str().to_lowercase();
-        if name_str == "x-forwarded-for"
-            || name_str == "x-forwarded-host"
-            || name_str == "x-forwarded-proto"
-            || name_str == "host"
-        {
-            continue;
-        }
-        origin_request.set_header(name, value);
-    }
+    // Remove headers that shouldn't be forwarded
+    req.remove_header("x-forwarded-for");
+    req.remove_header("x-forwarded-host");
+    req.remove_header("x-forwarded-proto");
 
     // Set the host header to match the target
-    origin_request.set_header("Host", &hostname);
+    req.set_header("Host", &hostname);
 
-    // Copy body for methods that typically have one
-    if req.get_method() == Method::POST
-        || req.get_method() == Method::PUT
-        || req.get_method() == Method::PATCH
-    {
-        origin_request.set_body(req.into_body());
-    }
-
-    // Set cache override to pass (don't cache)
-    origin_request.set_cache_override(CacheOverride::Pass);
+    // Set pass to bypass cache
+    req.set_pass(true);
 
     // Fetch from the dynamic backend
-    match origin_request.send(backend.name()) {
+    match req.send(backend.name()) {
         Ok(response) => Ok(response),
         Err(e) => Ok(Response::from_status(StatusCode::BAD_GATEWAY)
             .with_header("Content-Type", "application/json")
